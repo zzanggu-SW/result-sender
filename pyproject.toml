@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "result-sender"
+version = "0.1.0"
+description = ""
+authors = ["zzanggu-SW <gyeongmin951@aiofarm.co.kr>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+server-config-model = {git = "ssh://git@github.com/zzanggu-SW/config-model.git", rev = "v0.1-alpha"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
