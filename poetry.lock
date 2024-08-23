@@ -136,7 +136,7 @@ typing-extensions = ">=4.6.0,<4.7.0 || >4.7.0"
 
 [[package]]
 name = "server-config-model"
-version = "0.1.0"
+version = "v0.1-beta"
 description = ""
 optional = false
 python-versions = "^3.11"
@@ -149,8 +149,8 @@ pydantic = "^2.8.2"
 [package.source]
 type = "git"
 url = "ssh://git@github.com/zzanggu-SW/config-model.git"
-reference = "v0.1-alpha"
-resolved_reference = "dac87796beff1d1d8c22a904a335b44c0204b329"
+reference = "v0.1-beta"
+resolved_reference = "02b7ab263355ec30d21e85f4c9d4af1ef8aa760d"
 
 [[package]]
 name = "typing-extensions"
@@ -166,4 +166,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "0fcd105ba389c9a9bbe8876c310b987882e8ab5c3e73ffac3ad28031242d2794"
+content-hash = "1486dbf01fa09ef298933302b5d15a797312af435a0ee9225f113ee5f62e1744"

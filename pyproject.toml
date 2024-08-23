@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-server-config-model = {git = "ssh://git@github.com/zzanggu-SW/config-model.git", rev = "v0.1-alpha"}
+server-config-model = {git = "ssh://git@github.com/zzanggu-SW/config-model.git", rev = "v0.1-beta"}
 
 
 [build-system]
