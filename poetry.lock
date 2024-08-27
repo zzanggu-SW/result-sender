@@ -12,6 +12,21 @@ files = [
 ]
 
 [[package]]
+name = "io-schemas"
+version = "v0.1.2-alpha"
+description = ""
+optional = false
+python-versions = "^3.11"
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/aioFarm/io-schemas.git"
+reference = "v0.1.2-alpha"
+resolved_reference = "0dff87dfb5855ecb8a45dcba059a06bffbd8df59"
+
+[[package]]
 name = "pydantic"
 version = "2.8.2"
 description = "Data validation using Python type hints"
@@ -150,7 +165,7 @@ pydantic = "^2.8.2"
 type = "git"
 url = "ssh://git@github.com/zzanggu-SW/config-model.git"
 reference = "v0.1-beta"
-resolved_reference = "02b7ab263355ec30d21e85f4c9d4af1ef8aa760d"
+resolved_reference = "e665f290f2229e5a035c9c873b7cdd5555998794"
 
 [[package]]
 name = "typing-extensions"
@@ -166,4 +181,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "1486dbf01fa09ef298933302b5d15a797312af435a0ee9225f113ee5f62e1744"
+content-hash = "2c0461347605822c5fd6f31ee51afa96be5ebd9ab8d1e2f85ae195b271024e8b"
