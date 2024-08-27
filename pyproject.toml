@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.11"
 server-config-model = {git = "ssh://git@github.com/zzanggu-SW/config-model.git", rev = "v0.1-beta"}
 io-schemas = {git = "https://github.com/aioFarm/io-schemas.git", rev = "v0.1.2-alpha"}
+pypiwin32 = "^223"
 
 
 [build-system]
