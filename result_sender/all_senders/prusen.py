@@ -45,7 +45,7 @@ class ResultSender(ResultInterface):
 
         self.client_len = self.config.program_config.line_count
         self.gear_len = len(self.config.serial_config.inputs)
-        self.send_offset = [self.config.serial_config.outputs[idx].offset for idx in self.gear_len]
+        self.send_offset = [self.config.serial_config.outputs[idx].offset for idx in range(self.gear_len)]
         self.result_offset = [
             offset - 2 for offset in self.send_offset
         ]
