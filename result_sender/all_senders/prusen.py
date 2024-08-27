@@ -117,7 +117,7 @@ class ResultSender(ResultInterface):
             for i in range(int(cls.INPUT_COUNT))
         ]
         config.serial_config.outputs = [
-            OutputSerialConfigItem(port=f"COM{i + 1}", baudrate=38400, pin=i + 29, offset=20)
+            OutputSerialConfigItem(port=f"COM{i + 1}", baudrate=38400, pin=i + 30, offset=20)
             for i in range(int(cls.OUTPUT_COUNT))
         ]
         save_config(root_config=root_config)
