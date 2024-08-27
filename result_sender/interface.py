@@ -3,13 +3,13 @@ from threading import Thread
 
 class ResultInterface(Thread):
     def __init__(self, *args, **kwargs):
-        self.logger = None
+        super().__init__(daemon=True)
 
     def run(self):
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     @classmethod
-    def check_valid_config(self):
+    def check_valid_config(cls):
         """설정한 값이 해당 SerialResultSender와 유효한지 확인합니다"""
         raise NotImplementedError("This method should be implemented by subclasses.")
     

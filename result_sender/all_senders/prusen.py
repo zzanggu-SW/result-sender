@@ -32,6 +32,7 @@ class ResultSender(ResultInterface):
     OUTPUT_COUNT = 1
 
     def __init__(self, *args, **kwargs):
+        super().__init__()
         root_config: RootConfig = load_server_root_config()
         self.config: ServerConfig = root_config.config
 
