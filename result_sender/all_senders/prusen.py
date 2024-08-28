@@ -27,7 +27,6 @@ from result_sender.libs.sync.sync_sender import shm_count_loader
 
 
 class ResultSender(ResultInterface):
-    
     INPUT_COUNT = 1
     OUTPUT_COUNT = 1
 
@@ -45,10 +44,11 @@ class ResultSender(ResultInterface):
 
         self.client_len = self.config.program_config.line_count
         self.gear_len = len(self.config.serial_config.inputs)
-        self.send_offset = [self.config.serial_config.outputs[idx].offset for idx in range(self.gear_len)]
-        self.result_offset = [
-            offset - 2 for offset in self.send_offset
+        self.send_offset = [
+            self.config.serial_config.outputs[idx].offset
+            for idx in range(self.gear_len)
         ]
+        self.result_offset = [offset - 2 for offset in self.send_offset]
         self.SYNC_COUNT: Optional[int] = None
 
         # self.sync_counts: list[Optional[int]] = [None for _ in range(self.client_len)]
@@ -62,7 +62,7 @@ class ResultSender(ResultInterface):
             client_idx: [None for _ in range(100)]
             for client_idx in range(self.client_len)
         }
-        
+
         if self.config.serial_config.is_read_configured:
             sync_port = kwargs.get("sync_port", "COM7")
             sync_baud_rate = kwargs.get("sync_baud_rate", "")
@@ -88,19 +88,23 @@ class ResultSender(ResultInterface):
         # 유효성 검사
         if len(config.serial_config.inputs) != cls.INPUT_COUNT:
             raise ValueError("해당 모듈과 설정의 값이 일치하지 않습니다.")
-        
+
         if len(config.serial_config.outputs) != cls.OUTPUT_COUNT:
             raise ValueError("해당 모듈과 설정의 값이 일치하지 않습니다.")
-        
+
         for input_config in config.serial_config.inputs:
-            with serial.Serial(input_config.port, baudrate=input_config.baudrate, timeout=1) as ser:
+            with serial.Serial(
+                input_config.port, baudrate=input_config.baudrate, timeout=1
+            ) as ser:
                 if ser.is_open:
                     print(f"Connected to {input_config.port}")
         config.serial_config.is_read_configured = True
         save_config(root_config=root_config)
 
         for output_item in config.serial_config.outputs:
-            with serial.Serial(output_item.port, baudrate=output_item.baudrate, timeout=1) as ser:
+            with serial.Serial(
+                output_item.port, baudrate=output_item.baudrate, timeout=1
+            ) as ser:
                 if ser.is_open:
                     print(f"Connected to {output_item.port}")
         config.serial_config.is_send_configured = True
@@ -118,7 +122,9 @@ class ResultSender(ResultInterface):
             for i in range(int(cls.INPUT_COUNT))
         ]
         config.serial_config.outputs = [
-            OutputSerialConfigItem(port=f"COM{i + 1}", baudrate=38400, pin=i + 30, offset=20)
+            OutputSerialConfigItem(
+                port=f"COM{i + 1}", baudrate=38400, pin=i + 30, offset=20
+            )
             for i in range(int(cls.OUTPUT_COUNT))
         ]
         save_config(root_config=root_config)
@@ -129,7 +135,7 @@ class ResultSender(ResultInterface):
         root_config: RootConfig = load_server_root_config()
         config: ServerConfig = root_config.config
         pass
-    
+
     def run(self):
         print("run input")
         self.logger = Log().config_queue_log(self.log_queue, self.name)
@@ -219,7 +225,7 @@ class ResultSender(ResultInterface):
                     shape_msg_list.append(f"형상:{0}")
                 # 초기화
                 self.count_flag_to_fruit[line_idx][target_count] = None
-            msg = ','.join(shape_msg_list) + "\r\n"
+            msg = ",".join(shape_msg_list) + "\r\n"
             self.count_flag_to_message_list[target_count] = string2bytes(msg)
             if print_flag:
                 self.log_message(
@@ -251,13 +257,17 @@ class ResultSender(ResultInterface):
     def result_sender_logger(self):
         listener = Log()
         log_queue = Queue(-1)
-        date = datetime.today().strftime('%Y-%m-%d')
-        home_dir = os.path.expanduser('~')
-        log_base_path = os.path.join(home_dir, '.aiofarm', 'log')
+        date = datetime.today().strftime("%Y-%m-%d")
+        home_dir = os.path.expanduser("~")
+        log_base_path = os.path.join(home_dir, ".aiofarm", "log")
         log_path = os.path.join(log_base_path, date)
-        
+
         if not Path(log_path).exists():
             Path(log_path).mkdir(parents=True)
-            
-        listener.listener_start(f'{log_path}/{self.name.lower()}_result_sender', f'{self.name.lower()}_listener', log_queue)
+
+        listener.listener_start(
+            f"{log_path}/{self.name.lower()}_result_sender",
+            f"{self.name.lower()}_listener",
+            log_queue,
+        )
         return log_queue
