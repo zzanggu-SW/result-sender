@@ -91,27 +91,36 @@ class ResultSender(ResultInterface):
 
         if len(config.serial_config.outputs) != cls.OUTPUT_COUNT:
             raise ValueError("해당 모듈과 설정의 값이 일치하지 않습니다.")
-        serial_list = []
-        for input_config in config.serial_config.inputs:
-            ser = serial.Serial(
-                input_config.port, baudrate=input_config.baudrate, timeout=1
-            )
-            serial_list.append(ser)
-            if ser.is_open:
-                print(f"Connected to {input_config.port}")
-        config.serial_config.is_read_configured = True
-        save_config(root_config=root_config)
-        for output_item in config.serial_config.outputs:
-            ser = serial.Serial(
-                output_item.port, baudrate=output_item.baudrate, timeout=1
-            )
-            serial_list.append(ser)
-            if ser.is_open:
-                print(f"Connected to {input_config.port}")
-        config.serial_config.is_send_configured = True
-        save_config(root_config=root_config)
 
-        return True
+        serial_list = []
+        try:
+            for input_config in config.serial_config.inputs:
+                ser = serial.Serial(
+                    input_config.port, baudrate=input_config.baudrate, timeout=1
+                )
+                serial_list.append(ser)
+                if ser.is_open:
+                    print(f"Connected to {input_config.port}")
+            config.serial_config.is_read_configured = True
+            save_config(root_config=root_config)
+
+            for output_item in config.serial_config.outputs:
+                ser = serial.Serial(
+                    output_item.port, baudrate=output_item.baudrate, timeout=1
+                )
+                serial_list.append(ser)
+                if ser.is_open:
+                    print(f"Connected to {output_item.port}")
+            config.serial_config.is_send_configured = True
+            save_config(root_config=root_config)
+
+            return True
+        finally:
+            # 모든 시리얼 포트 연결을 닫습니다
+            for ser in serial_list:
+                if ser.is_open:
+                    ser.close()
+                    print(f"Disconnected from {ser.port}")
 
     @classmethod
     def create_default_config(cls):
