@@ -202,7 +202,7 @@ pydantic = "^2.8.2"
 type = "git"
 url = "ssh://git@github.com/zzanggu-SW/config-model.git"
 reference = "v0.1-beta"
-resolved_reference = "e665f290f2229e5a035c9c873b7cdd5555998794"
+resolved_reference = "fd35d4460d5e70fe2d8a3a3446cc4f4434c3dbe8"
 
 [[package]]
 name = "typing-extensions"
