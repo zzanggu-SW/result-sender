@@ -26,9 +26,11 @@ from result_sender.libs.log_controller import Log, logger_formatted
 from result_sender.libs.sync.sync_sender import shm_count_loader
 
 
+
 class ResultSender(ResultInterface):
     INPUT_COUNT = 1
     OUTPUT_COUNT = 1
+    BAUDRATE = 38400
 
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -146,7 +148,183 @@ class ResultSender(ResultInterface):
         """현장에서 사용하는 아두이노 코드를 반환합니다"""
         root_config: RootConfig = load_server_root_config()
         config: ServerConfig = root_config.config
-        pass
+        
+        baudrate = cls.BAUDRATE
+        num_of_line = config.program_config.line_count
+        num_of_beat = config.serial_config.signal_count_per_pulse
+        
+        pin_in_map = [input_item.pin for input_item in config.serial_config.inputs]
+        pin_out_map = [output.pin for output in config.serial_config.outputs]
+        trigger_intervals = [input_item.camera_delay for input_item in config.serial_config.inputs]
+        soft_intervals = [10 for _ in range(num_of_line)]  # 예시 소프트 인터벌
+        
+        # 배열을 아두이노 코드 형식으로 변환
+        pin_in_map_str = ", ".join(map(str, pin_in_map))
+        pin_out_map_str = ", ".join(map(str, pin_out_map))
+        trigger_intervals_str = ", ".join(map(str, trigger_intervals))
+        soft_intervals_str = ", ".join(map(str, soft_intervals))
+
+        arduino_sketch = f"""
+        // 개별 구분되는 라인의 개수
+        #define NUM_OF_LINE {num_of_line}
+        // 한 싱크의 총 이미지 촬영 tn
+        #define NUM_OF_BEAT {num_of_beat}
+
+        // interval2의 최소 수치
+        #define ITD 0
+        // interval2의 최대 수치 ; 4000으로 설정되어있다면, 4초이상 간격이 벌어질경우 라인이 정지했다고 판단한다는 뜻
+        #define ITU 4000
+
+        const int PIN_IN_MAP[NUM_OF_LINE] = {{{pin_in_map_str}}};     // 2~9번 라인이 각각 PLC의 몇번 포트에 연결되어있는가를 Array로 전달
+        const int PIN_OUT_MAP[NUM_OF_LINE] = {{{pin_out_map_str}}}; // 0~n번 라인이 각각 PLC의 몇번 포트에 연결되어있는가를 Array로 전달
+        int TRIGGER_INTERVAL[NUM_OF_LINE] = {{{trigger_intervals_str}}};  // 트리거 인터벌 = 신호받고 -> 카메라에게 신호 주는데까지의 시간
+        int SOFT_INTERVAL[NUM_OF_LINE] = {{{soft_intervals_str}}};  // 소프트 인터벌 = 카메라에게 신호 주고 -> 컴퓨터에게 신호 주는데까지의 시간
+
+        unsigned long cM;
+        bool onOff[NUM_OF_LINE];
+        uint32_t photoelectric_sensor_signal_count[NUM_OF_LINE];
+        uint32_t downbeat_count[NUM_OF_LINE];
+        uint32_t downbeat_count_now[NUM_OF_LINE];
+        uint32_t downbeat_sync_count[NUM_OF_LINE];
+        uint32_t downbeat_trig_count[NUM_OF_LINE];
+        int interval_check_count[NUM_OF_LINE];
+        unsigned long interval2[NUM_OF_LINE];
+        unsigned long pMH[NUM_OF_LINE];
+        unsigned long pM[NUM_OF_LINE];
+        unsigned long pM2[NUM_OF_LINE];
+        uint32_t upbeat_count[NUM_OF_LINE][NUM_OF_BEAT - 1];
+        uint32_t upbeat_sync_count[NUM_OF_LINE][NUM_OF_BEAT - 1];
+        int upbeat_interval[NUM_OF_LINE][NUM_OF_BEAT - 1];
+        uint32_t count[NUM_OF_LINE];
+
+        void setup()
+        {{
+            for (int i = 0; i < NUM_OF_LINE; i++)
+            {{
+                onOff[i] = false;
+                photoelectric_sensor_signal_count[i] = 0;
+                downbeat_count[i] = 0;
+                downbeat_count_now[i] = 0;
+                downbeat_sync_count[i] = 0;
+                downbeat_trig_count[i] = 0;
+                interval_check_count[i] = 0;
+                count[i] = 0;
+                pM[i] = millis();
+                pM2[i] = millis();
+                pMH[i] = millis();
+
+                pinMode(PIN_IN_MAP[i], INPUT);
+                pinMode(PIN_OUT_MAP[i], OUTPUT);
+
+                interval2[i] = 440;
+                for (int j = 0; j < NUM_OF_BEAT - 1; j++)
+                {{
+                    upbeat_count[i][j] = 0;
+                    upbeat_sync_count[i][j] = 0;
+                    upbeat_interval[i][j] = 0;
+                }}
+            }}
+
+            pinMode(7, OUTPUT);
+            Serial.begin({baudrate});
+            Serial1.begin({baudrate});
+            Serial2.begin({baudrate});
+            Serial3.begin({baudrate});
+        }}
+
+        uint32_t check_digital_read(int numOfPin, int array_num, bool ooc[])
+        {{
+            if (digitalRead(numOfPin) == 1)
+            {{
+                if (ooc[array_num] == false)
+                {{
+                    ooc[array_num] = true;
+                    return 1;
+                }}
+            }}
+            else if (digitalRead(numOfPin) == 0)
+            {{
+                if (ooc[array_num] == true)
+                {{
+                    ooc[array_num] = false;
+                }}
+            }}
+            return 0;
+        }}
+
+        void signal(int k)
+        {{
+            photoelectric_sensor_signal_count[k] += check_digital_read(PIN_IN_MAP[k], k, onOff);
+            if (downbeat_count[k] < photoelectric_sensor_signal_count[k])
+            {{
+                if (cM - pM[k] < 5)
+                {{
+                    downbeat_count[k] = photoelectric_sensor_signal_count[k];
+                    return;
+                }}
+                downbeat_count[k] = photoelectric_sensor_signal_count[k];
+                interval_check_count[k]++;
+                pM[k] = cM;
+                if (interval_check_count[k] % 2 == 0)
+                {{
+                    interval_check_count[k] = 0;
+                    interval2[k] = cM - pM2[k];
+                    pM2[k] = cM;
+                    if ((ITD < interval2[k]) && (interval2[k] < ITU))
+                    {{
+                        for (int i = 0; i < NUM_OF_BEAT - 1; i++)
+                        {{
+                            upbeat_interval[k][i] = (interval2[k] / 2) / (NUM_OF_BEAT) * (i + 1);
+                        }}
+                    }}
+                }}
+            }}
+            if (downbeat_trig_count[k] < downbeat_count[k] and cM - pM[k] >= TRIGGER_INTERVAL[k])
+            {{
+                downbeat_trig_count[k] = downbeat_count[k];
+                downbeat_count_now[k] = downbeat_count[k];
+                pMH[k] = cM;
+                digitalWrite(PIN_OUT_MAP[k], HIGH);
+            }}
+            if (downbeat_sync_count[k] < downbeat_count_now[k] and cM - pMH[k] >= SOFT_INTERVAL[k])
+            {{
+                downbeat_sync_count[k] = downbeat_count_now[k];
+                count[k]++; // 이거를 시리얼로 보내세요.
+                digitalWrite(PIN_OUT_MAP[k], LOW);
+                Serial.println("L" + String(k) + "S" + String(count[k] % 100) + "C0" + "G0");
+                Serial1.println("L" + String(k) + "S" + String(count[k] % 100) + "C0" + "G0");
+            }}
+            for (int i = 0; i < NUM_OF_BEAT - 1; i++)
+            {{
+                if (upbeat_count[k][i] != downbeat_sync_count[k] and upbeat_interval[k][i] != 0 and cM - pMH[k] >= upbeat_interval[k][i])
+                {{
+                    upbeat_count[k][i] = downbeat_sync_count[k];
+                    digitalWrite(PIN_OUT_MAP[k], HIGH);
+                }}
+            }}
+            for (int i = 0; i < NUM_OF_BEAT - 1; i++)
+            {{
+                if (upbeat_sync_count[k][i] != downbeat_sync_count[k] and upbeat_interval[k][i] != 0 and cM - pMH[k] >= upbeat_interval[k][i] + SOFT_INTERVAL[k])
+                {{
+                    upbeat_sync_count[k][i] = downbeat_sync_count[k];
+                    digitalWrite(PIN_OUT_MAP[k], LOW);
+                    Serial1.println("L" + String(k) + "S" + String(count[k] % 100) + "C" + String(i + 1) + "G0");
+                    Serial.println("L" + String(k) + "S" + String(count[k] % 100) + "C" + String(i + 1) + "G0");
+                }}
+            }}
+        }}
+
+        void loop()
+        {{
+            cM = millis();
+            for (int i = 0; i < NUM_OF_LINE; i++)
+            {{
+                signal(i);
+            }}
+        }}
+        """
+
+        return arduino_sketch
 
     def run(self):
         print("run input")
@@ -210,7 +388,7 @@ class ResultSender(ResultInterface):
             f"diff count = {count_diff}"
             f"line_idx : {line_idx} "
             f"fruit_grade_idx : {data.root.grade_idx} ",
-            log_level=logging.ERROR if count_diff > 18 else logging.INFO,
+            log_level=logging.ERROR if count_diff > self.config.serial_config.outputs[line_idx].offset else logging.INFO,
         )
 
     def result_serial_loop(self, offset=27):
