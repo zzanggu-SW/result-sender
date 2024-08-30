@@ -141,6 +141,7 @@ class ResultSender(ResultInterface):
         ]
         config.serial_config.is_read_configured = False
         config.serial_config.is_send_configured = False
+        config.serial_config.is_production_sketch_uploaded = False
         save_config(root_config=root_config)
 
     @classmethod
