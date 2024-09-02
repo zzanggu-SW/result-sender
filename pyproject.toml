@@ -10,8 +10,20 @@ python = "^3.11"
 server-config-model = {git = "ssh://git@github.com/zzanggu-SW/config-model.git", rev = "v0.1-beta"}
 io-schemas = {git = "https://github.com/aioFarm/io-schemas.git", rev = "v0.1.2-alpha"}
 pypiwin32 = "^223"
+pyserial = "^3.5"
+colorama = "^0.4.6"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+
+[tool.black]
+line_length = 88
+target_version = ['py311']
+skip_string_normalization = false
