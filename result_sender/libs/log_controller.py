@@ -27,7 +27,9 @@ class Log:
         return logging.getLogger(name)
 
     def listener_start(self, file_path, name, queue):
-        self.th = Thread(target=self._proc_log_queue, args=(file_path, name, queue), daemon=True)
+        self.th = Thread(
+            target=self._proc_log_queue, args=(file_path, name, queue), daemon=True
+        )
         self.th.start()
 
     def listener_end(self, queue):
@@ -96,8 +98,16 @@ class Log:
             import win32api
             import win32con
 
-            win32api.SetHandleInformation(msvcrt.get_osfhandle(fh_dbg.stream.fileno()), win32con.HANDLE_FLAG_INHERIT, 0)
-            win32api.SetHandleInformation(msvcrt.get_osfhandle(fh_err.stream.fileno()), win32con.HANDLE_FLAG_INHERIT, 0)
+            win32api.SetHandleInformation(
+                msvcrt.get_osfhandle(fh_dbg.stream.fileno()),
+                win32con.HANDLE_FLAG_INHERIT,
+                0,
+            )
+            win32api.SetHandleInformation(
+                msvcrt.get_osfhandle(fh_err.stream.fileno()),
+                win32con.HANDLE_FLAG_INHERIT,
+                0,
+            )
         # create logger, assign handler
         logger = logging.getLogger(name)
         logger.setLevel(logging.DEBUG)
@@ -127,7 +137,9 @@ def flask_logger_set(f_name="app.log", port=5000, logger_name="werkzeug", logger
 
     logger.setLevel(logging.DEBUG)
 
-    log_format = f"%(asctime)s - %(name)s - %(levelname)s - [Port: {port}] - %(message)s"
+    log_format = (
+        f"%(asctime)s - %(name)s - %(levelname)s - [Port: {port}] - %(message)s"
+    )
     formatter = logging.Formatter(log_format)
 
     stream_handler = logging.StreamHandler()

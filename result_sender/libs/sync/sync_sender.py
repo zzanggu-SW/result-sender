@@ -2,7 +2,9 @@ from multiprocessing import shared_memory as shm
 
 
 class SharedCount(shm.SharedMemory):
-    def __init__(self, name=None, create=False, size=0, sync_cut_num=4, logger=None, p_name=None):
+    def __init__(
+        self, name=None, create=False, size=0, sync_cut_num=4, logger=None, p_name=None
+    ):
         super().__init__(name, create, size)
         self.sync_cut_num = sync_cut_num
         self.logger = logger
