@@ -1,35 +1,34 @@
-from asyncio import Queue
-from datetime import datetime
 import logging
 import os
-from pathlib import Path
 import re
-from threading import Thread
 import time
-import serial
+from multiprocessing import Queue
+from datetime import datetime
+from pathlib import Path
+from threading import Thread
 from typing import Optional
 
+import serial
+from io_schemas.sort_result import RootSortResult
 from server_config_model import (
+    TestSortResult,
+    InputSerialConfigItem,
+    OutputSerialConfigItem,
     RootConfig,
     ServerConfig,
     load_server_root_config,
     save_config,
-    InputSerialConfigItem,
-    OutputSerialConfigItem,
 )
-from result_sender.utils.decoders import decode_message
-from io_schemas.sort_result import RootSortResult
 
 from result_sender.interface import ResultInterface
 from result_sender.libs.etc_tools import string2bytes
 from result_sender.libs.log_controller import Log, logger_formatted
-from result_sender.libs.sync.sync_sender import shm_count_loader
-
+from result_sender.utils.decoders import decode_message
 
 
 class ResultSender(ResultInterface):
-    INPUT_COUNT = 1
-    OUTPUT_COUNT = 1
+    INPUT_COUNT = 1  # 입력 시리얼 개수 유효성 검사를 위한 값
+    OUTPUT_COUNT = 1  #  출력 시리얼 개수 유효성 검사를 위한 값
     BAUDRATE = 38400
 
     def __init__(self, *args, **kwargs):
@@ -44,8 +43,10 @@ class ResultSender(ResultInterface):
         self.log_queue = self.result_sender_logger()
         self.result_data_queue = kwargs.get("result_data_queue")
 
-        self.client_len = self.config.program_config.line_count
-        self.gear_len = len(self.config.serial_config.inputs)
+        self.client_len = (
+            self.config.program_config.line_count
+        )  # 과일이 지나가는 라인의 수를 의미합니다.
+        self.gear_len = len(self.config.serial_config.inputs)  # 구동축의 개수를 의미합니다.
         self.send_offset = [
             self.config.serial_config.outputs[idx].offset
             for idx in range(self.gear_len)
@@ -54,7 +55,6 @@ class ResultSender(ResultInterface):
         self.SYNC_COUNT: Optional[int] = None
 
         # self.sync_counts: list[Optional[int]] = [None for _ in range(self.client_len)]
-        self.result_data_queue = kwargs.get("result_data_queue")
         self.last_sync_num = sync_num - 2
 
         self.count_flag_to_message_list: dict[Optional[bytes]] = {
@@ -66,8 +66,8 @@ class ResultSender(ResultInterface):
         }
 
         if self.config.serial_config.is_read_configured:
-            sync_port = kwargs.get("sync_port", "COM7")
-            sync_baud_rate = kwargs.get("sync_baud_rate", "")
+            sync_port = self.config.serial_config.inputs[0].port
+            sync_baud_rate = self.config.serial_config.inputs[0].baudrate
             self.ser_read = serial.Serial(sync_port, sync_baud_rate)
             print("connect sync serial")
         if self.config.serial_config.is_send_configured:
@@ -120,6 +120,7 @@ class ResultSender(ResultInterface):
         finally:
             # 모든 시리얼 포트 연결을 닫습니다
             for ser in serial_list:
+                ser: serial.Serial
                 if ser.is_open:
                     ser.close()
                     print(f"Disconnected from {ser.port}")
@@ -149,16 +150,18 @@ class ResultSender(ResultInterface):
         """현장에서 사용하는 아두이노 코드를 반환합니다"""
         root_config: RootConfig = load_server_root_config()
         config: ServerConfig = root_config.config
-        
+
         baudrate = cls.BAUDRATE
-        num_of_line = config.program_config.line_count
+        num_of_line = cls.INPUT_COUNT
         num_of_beat = config.serial_config.signal_count_per_pulse
-        
+
         pin_in_map = [input_item.pin for input_item in config.serial_config.inputs]
         pin_out_map = [output.pin for output in config.serial_config.outputs]
-        trigger_intervals = [input_item.camera_delay for input_item in config.serial_config.inputs]
-        soft_intervals = [10 for _ in range(num_of_line)]  # 예시 소프트 인터벌
-        
+        trigger_intervals = [
+            input_item.camera_delay for input_item in config.serial_config.inputs
+        ]
+        soft_intervals = [10 for _ in range(num_of_line)]
+
         # 배열을 아두이노 코드 형식으로 변환
         pin_in_map_str = ", ".join(map(str, pin_in_map))
         pin_out_map_str = ", ".join(map(str, pin_out_map))
@@ -331,29 +334,56 @@ class ResultSender(ResultInterface):
         print("run input")
         self.logger = Log().config_queue_log(self.log_queue, self.name)
 
-        for gear_idx in range(self.gear_len):
+        if self.config.test_status:  # 설치 프로그램에서 사용됩니다.
             Thread(
-                target=self.result_serial_loop,
-                kwargs={
-                    "offset": self.result_offset[gear_idx],
-                    "client_idx": gear_idx,
-                },
+                target=self.get_fruit_test_data,
+                args=(self.result_data_queue,),
                 daemon=True,
             ).start()
-            Thread(
-                target=self.send_serial_loop,
-                kwargs={
-                    "offset": self.send_offset[gear_idx],
-                    "client_idx": gear_idx,
-                },
-                daemon=True,
-            ).start()
-        print("result loop, send loop  start")
 
-        Thread(
-            target=self.get_fruit_data, args=(self.result_data_queue,), daemon=True
-        ).start()
-        if not self.test:
+            for gear_idx in range(self.gear_len):
+                Thread(
+                    target=self.result_serial_test_loop,
+                    kwargs={
+                        "offset": self.result_offset[gear_idx],
+                        "client_idx": gear_idx,
+                    },
+                    daemon=True,
+                ).start()
+                Thread(
+                    target=self.send_serial_loop,
+                    kwargs={
+                        "offset": self.send_offset[gear_idx],
+                        "client_idx": gear_idx,
+                    },
+                    daemon=True,
+                ).start()
+            print("result loop, send loop  start")
+        else:  # 실제 프로덕션에서 사용됩니다.
+            Thread(
+                target=self.get_fruit_data, args=(self.result_data_queue,), daemon=True
+            ).start()
+
+            for gear_idx in range(self.gear_len):
+                Thread(
+                    target=self.result_serial_loop,
+                    kwargs={
+                        "offset": self.result_offset[gear_idx],
+                        "client_idx": gear_idx,
+                    },
+                    daemon=True,
+                ).start()
+                Thread(
+                    target=self.send_serial_loop,
+                    kwargs={
+                        "offset": self.send_offset[gear_idx],
+                        "client_idx": gear_idx,
+                    },
+                    daemon=True,
+                ).start()
+            print("result loop, send loop  start")
+
+        if self.config.serial_config.is_read_configured:  # 시리얼 연결 설정 완료에만 작동합니다.
             while True:
                 time.sleep(0.001)
                 ser_read_bytes = self.ser_read.readline()
@@ -361,7 +391,6 @@ class ResultSender(ResultInterface):
                 re_bytes_string = re.sub(
                     rb"shutdown|[\r\n]", b"", ser_read_bytes
                 )  # \r\n , shutdown 지우기
-                # TODO 라인 3개 판별 -> flag or cut 판별
                 self.process_serial_data(re_bytes_string)
 
     def process_serial_data(self, re_bytes_string):
@@ -380,16 +409,30 @@ class ResultSender(ResultInterface):
         _count_flag = int(data.root.count_flag)
         line_idx = int(data.root.client)
         count_diff = (int(self.SYNC_COUNT) - int(_count_flag)) % 100
+        if self.client_len <= line_idx:
+            self.log_message(
+                f"[Invalid Line Index] "
+                f"self.SYNC_COUNT : {self.SYNC_COUNT}, "
+                f"_count_flag: {_count_flag} "
+                f"diff count = {count_diff}"
+                f"line_idx : {line_idx} "
+                f"client_len : {self.client_len} "
+                f"HAVE TO lien_idx < client_len : {line_idx < self.client_len} ",
+                log_level=logging.ERROR,
+            )
+            return
         self.count_flag_to_fruit[line_idx][_count_flag] = data
 
         self.log_message(
-            f"Receive Fruit Instance"
+            f"Receive Fruit Instance Over the offset"
             f"self.SYNC_COUNT : {self.SYNC_COUNT}, "
             f"_count_flag: {_count_flag} "
             f"diff count = {count_diff}"
             f"line_idx : {line_idx} "
             f"fruit_grade_idx : {data.root.grade_idx} ",
-            log_level=logging.ERROR if count_diff > self.config.serial_config.outputs[line_idx].offset else logging.INFO,
+            log_level=logging.ERROR
+            if count_diff > self.config.serial_config.outputs[line_idx].offset
+            else logging.INFO,
         )
 
     def result_serial_loop(self, offset=27):
@@ -401,7 +444,6 @@ class ResultSender(ResultInterface):
             time.sleep(0.001)
             if offset > (self.SYNC_COUNT - target_count) % 100:
                 continue
-            # TODO 경주 프르센대응 필요
             shape_msg_list = []
             print_flag = False
             for line_idx in range(self.client_len):
@@ -411,9 +453,9 @@ class ResultSender(ResultInterface):
                 if fruit_instance:
                     print_flag = True
                     grade_idx = fruit_instance.root.grade_idx
-                    shape_msg_list.append(f"형상:{grade_idx}")
+                    shape_msg_list.append(f"형상{line_idx}:{grade_idx}")
                 else:
-                    shape_msg_list.append(f"형상:{0}")
+                    shape_msg_list.append(f"형상{line_idx}:{0}")
                 # 초기화
                 self.count_flag_to_fruit[line_idx][target_count] = None
             msg = ",".join(shape_msg_list) + "\r\n"
@@ -434,13 +476,17 @@ class ResultSender(ResultInterface):
         while True:
             target_count %= 100
             time.sleep(0.001)
-            if offset > (self.SYNC_COUNT - target_count) % 100:
+            count_gap = (self.SYNC_COUNT - target_count) % 100
+            if offset > count_gap:
                 continue
             serial_msg = self.count_flag_to_message_list[target_count]
             if self.config.serial_config.is_send_configured:
                 self.ser_results[0].write(serial_msg)
                 self.log_message(
-                    f"send_serial_loop_C{client_idx} {self.SYNC_COUNT}, {target_count}, {serial_msg}"
+                    f"send_serial_loop_C{client_idx} {self.SYNC_COUNT}, {target_count}, {serial_msg}, "
+                    f"target offset: {offset}, "
+                    f"now offset: {count_gap}",
+                    logging.INFO if offset == count_gap else logging.ERROR,
                 )
                 self.count_flag_to_message_list[target_count] = None
             target_count += 1
@@ -462,3 +508,47 @@ class ResultSender(ResultInterface):
             log_queue,
         )
         return log_queue
+
+    def get_fruit_test_data(self, queue):
+        while True:
+            time.sleep(0.001)
+            data: RootSortResult = queue.get()
+            Thread(
+                target=self.make_test_fruit_object, args=(data,), daemon=True
+            ).start()
+
+    def make_test_fruit_object(self, data: TestSortResult):
+        _count_flag = int(data.count_flag)
+        line_idx = int(data.client)
+        self.count_flag_to_fruit[line_idx][_count_flag] = data
+
+    def result_serial_test_loop(self, offset=27):
+        while self.SYNC_COUNT is None:
+            time.sleep(0.001)
+        target_count = 0
+        while True:
+            target_count %= 100
+            time.sleep(0.001)
+            if offset > (self.SYNC_COUNT - target_count) % 100:
+                continue
+            shape_msg_list = []
+            print_flag = False
+            for line_idx in range(self.client_len):
+                fruit_instance: Optional[TestSortResult] = self.count_flag_to_fruit[
+                    line_idx
+                ][target_count]
+                if fruit_instance:
+                    print_flag = True
+                    grade_idx = fruit_instance.grade_idx
+                    shape_msg_list.append(f"형상{line_idx}:{grade_idx}")
+                else:
+                    shape_msg_list.append(f"형상{line_idx}:{0}")
+                # 초기화
+                self.count_flag_to_fruit[line_idx][target_count] = None
+            msg = ",".join(shape_msg_list) + "\r\n"
+            self.count_flag_to_message_list[target_count] = string2bytes(msg)
+            if print_flag:
+                self.log_message(
+                    f"In result_serial_loop {self.SYNC_COUNT}, {target_count}, {msg}"
+                )
+            target_count += 1
