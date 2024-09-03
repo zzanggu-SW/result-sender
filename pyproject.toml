@@ -12,6 +12,8 @@ io-schemas = {git = "https://github.com/aioFarm/io-schemas.git", rev = "v0.1.2-a
 pypiwin32 = "^223"
 pyserial = "^3.5"
 colorama = "^0.4.6"
+pytest = "^8.3.2"
+pytest-mock = "^3.14.0"
 
 
 [build-system]

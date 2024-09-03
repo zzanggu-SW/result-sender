@@ -64,10 +64,11 @@ class ResultSender(ResultInterface):
             client_idx: [None for _ in range(100)]
             for client_idx in range(self.client_len)
         }
-
+        print(self.config, 'hi?')
         if self.config.serial_config.is_read_configured:
             sync_port = self.config.serial_config.inputs[0].port
             sync_baud_rate = self.config.serial_config.inputs[0].baudrate
+            print(sync_baud_rate, sync_port, 'hihi')
             self.ser_read = serial.Serial(sync_port, sync_baud_rate)
             print("connect sync serial")
         if self.config.serial_config.is_send_configured:
@@ -346,7 +347,6 @@ class ResultSender(ResultInterface):
                     target=self.result_serial_test_loop,
                     kwargs={
                         "offset": self.result_offset[gear_idx],
-                        "client_idx": gear_idx,
                     },
                     daemon=True,
                 ).start()
@@ -369,7 +369,6 @@ class ResultSender(ResultInterface):
                     target=self.result_serial_loop,
                     kwargs={
                         "offset": self.result_offset[gear_idx],
-                        "client_idx": gear_idx,
                     },
                     daemon=True,
                 ).start()
@@ -480,12 +479,13 @@ class ResultSender(ResultInterface):
             if offset > count_gap:
                 continue
             serial_msg = self.count_flag_to_message_list[target_count]
+            error_msg = ""
             if self.config.serial_config.is_send_configured:
                 self.ser_results[0].write(serial_msg)
                 self.log_message(
                     f"send_serial_loop_C{client_idx} {self.SYNC_COUNT}, {target_count}, {serial_msg}, "
-                    f"target offset: {offset}, "
-                    f"now offset: {count_gap}",
+                    f"target offset gap: {offset}, "
+                    f"now gap: {count_gap}",
                     logging.INFO if offset == count_gap else logging.ERROR,
                 )
                 self.count_flag_to_message_list[target_count] = None
