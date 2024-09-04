@@ -513,7 +513,7 @@ class ResultSender(ResultInterface):
         while True:
             time.sleep(0.001)
             data = queue.get()
-            data: RootSortResult = RootSortResult(**data)
+            data: TestSortResult = TestSortResult(**data)
             Thread(
                 target=self.make_test_fruit_object, args=(data,), daemon=True
             ).start()
